@@ -1,0 +1,32 @@
+# Building kompott backend  
+
+## Installing 3rdparty dependencies  
+
+### Installing erlang (https://github.com/yrashk/kerl). 
+
+  $ curl -O https://raw.githubusercontent.com/spawngrid/kerl/master/kerl
+  $ chmod +x kerl 
+  $ ./kerl build R16B03-1 r16b03-1
+  $ sudo mkdir /opt/kompott 
+  $ sudo chown USERNAME /opt/kompott 
+  $ ./kerl install r16b03-1 /opt/kompott/3rdparty/erlang-r16b03-1
+  $ cd /opt/kompott/3rdparty 
+  $ ln -s /opt/kompott/3rdparty/erlang-r16b03-1 erlang 
+
+### Installing rebar 
+
+  $ mkdir /opt/kompott/3rdparty/bin 
+  $ cd /opt/kompott/3rdparty/bin 
+  $ curl -O https://raw.github.com/wiki/rebar/rebar/rebar 
+  $ chmod +x rebar
+ 
+## Setting up build environment and building the release  
+
+  $ . /opt/kompott/3rdparty/erlang/activate 
+  $ export PATH=/opt/kompott/3rdparty/bin:$PATH 
+
+  
+  
+
+
+

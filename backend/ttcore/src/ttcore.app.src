@@ -1,0 +1,13 @@
+{application, ttcore,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib,
+                  cowboy
+                 ]},
+  {mod, { ttcore_app, []}},
+  {env, []}
+ ]}.

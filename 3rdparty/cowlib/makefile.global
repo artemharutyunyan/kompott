@@ -1,0 +1,68 @@
+### Commands 
+MKDIRHIER=mkdir -p
+TAR=tar 
+TOUCH=touch 
+REBAR=rebar
+CD=cd
+LN=ln
+PWD=$(shell pwd)
+
+## Variable definitions 
+
+### Globbal 
+WD=$(PWD)/tmp/
+SRC_DIR=$(PWD)/src/
+BUILD_ROOT=$(HOME)/src/kompott/build/
+BUILD_CANARY=$(BUILD_ROOT)/_canary
+
+DEPS_TARGET_DIR=$(BUILD_ROOT)/deps/
+ERL_DEPS_TARGET_DIR=$(DEPS_TARGET_DIR)/erl/
+ERL_DEPS_BUILD_CANARY=$(ERL_DEPS_TARGET_DIR)/_canary
+
+### Package specific variables 
+PACKAGE=$(PACKAGE_NAME)-$(PACKAGE_VERSION).$(PACKAGE_EXT)
+CANARY=$(ERL_DEPS_BUILD_CANARY)/$(PACKAGE)
+
+
+## Targets 
+.PHONY: prepare unpack build install clean 
+all: prepare unpack build install
+
+### Canary targets (files)
+$(CANARY).prepare:
+	$(MKDIRHIER) $(ERL_DEPS_BUILD_CANARY)
+	$(TOUCH) $@
+
+$(CANARY).unpack:
+	$(TOUCH) $@
+
+$(CANARY).build:
+	$(TOUCH) $@
+
+$(CANARY).install:
+	$(TOUCH) $@
+
+### Actual build targets 
+clean:
+	$(RM) -rf $(CANARY).prepare $(CANARY).unpack $(CANARY).build $(CANARY).install 
+	$(RM) -rf $(WD) 
+
+prepare: $(CANARY).prepare
+	$(MKDIRHIER) $(ERL_DEPS_TARGET_DIR) 
+	$(MKDIRHIER) $(ERL_DEPS_BUILD_CANARY)
+	$(MKDIRHIER) $(WD) 
+	$(TOUCH) $<  
+
+unpack: $(CANARY).unpack
+	$(TAR) zxvf $(SRC_DIR)/$(PACKAGE) -C $(WD)
+	$(TOUCH) $<
+	
+build: $(CANARY).build
+	$(CD) $(WD)/$(PACKAGE_NAME)-$(PACKAGE_VERSION) && $(REBAR) compile 
+	$(TOUCH) $< 
+
+install: $(CANARY).install
+	$(RM) -f $(ERL_DEPS_TARGET_DIR)/$(PACKAGE_NAME)
+	$(LN) -s $(WD)/$(PACKAGE_NAME)-$(PACKAGE_VERSION) $(ERL_DEPS_TARGET_DIR)/$(PACKAGE_NAME)
+	$(TOUCH) $<
+
