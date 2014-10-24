@@ -11,6 +11,7 @@ export ROOT=$(pwd)
 
 # Build tree root 
 export BUILD_ROOT=$ROOT/build 
+export APP_TARGET_ROOT=$BUILD_ROOT
 
 # Dependencies build root 
 export DEPS_TARGET_ROOT=$BUILD_ROOT/deps/
@@ -18,7 +19,7 @@ export DEPS_TARGET_ROOT=$BUILD_ROOT/deps/
 # External Erlang applications directory
 export ERL_DEPS_TARGET_ROOT=$DEPS_TARGET_ROOT/erl/
 export ERL_DEPS_TARGET_BIN=$ERL_DEPS_TARGET_ROOT/bin 
-export ERL_LIBS=$ERL_DEPS_TARGET_ROOT
+export ERL_LIBS=$BUILD_ROOT:$ERL_DEPS_TARGET_ROOT
 
 ERL=$(which erl)
 [ $? == 0 ] || die "Could not find erl in \$PATH"

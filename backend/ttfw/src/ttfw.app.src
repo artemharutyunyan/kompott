@@ -1,0 +1,12 @@
+{application, ttfw,
+ [
+  {description, "Kompott firmware update module"},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { ttfw_app, []}},
+  {env, []}
+ ]}.

@@ -14,7 +14,6 @@ MAKE=$(FILTER) make
 WD=$(PWD)/tmp/
 SRC_ROOT=$(PWD)/src/
 
-BUILD_CANARY=$(BUILD_ROOT)/_canary
 ERL_DEPS_BUILD_CANARY=$(ERL_DEPS_TARGET_ROOT)/_canary
 
 ### Package specific variables 
@@ -25,6 +24,20 @@ CANARY=$(ERL_DEPS_BUILD_CANARY)/$(PACKAGE)
 ## Targets 
 .PHONY: prepare all  
 all: prepare unpack build install post-install
+
+check-env:
+ifndef ERL_DEPS_TARGET_ROOT
+	$(error ERL_DEPS_TARGET_ROOT not defined)
+endif
+ifndef PACKAGE_NAME
+	$(error PACKAGE_NAME not defined)
+endif
+ifndef PACKAGE_VERSION
+	$(error PACKAGE_VERSION not defined)
+endif
+ifndef PACKAGE_EXT
+	$(error PACKAGE_EXT not defined)
+endif
 
 ### Canary targets (files)
 $(CANARY).prepare:	

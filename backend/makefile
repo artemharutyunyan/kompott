@@ -1,4 +1,4 @@
-DIRS = rebar cowlib ranch cowboy goldrush lager
+DIRS = ttfw ttcore
 
 .PHONY: all clean 
 

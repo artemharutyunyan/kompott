@@ -1,0 +1,44 @@
+### Commands 
+MKDIRHIER = $(FILTER) mkdir -p
+TAR = $(FILTER) tar 
+TOUCH = $(FILTER) touch
+REBAR = $(FILTER) $(shell which rebar)
+CD = $(FILTER) cd
+LN = $(FILTER) ln
+PWD=$(shell pwd)
+MAKE=$(FILTER) make
+RM=$(FILTER) rm
+
+## Variable definitions 
+APP_SOURCE_ROOT=$(PWD)
+BUILD_CANARY=$(APP_TARGET_ROOT)/_canary
+CANARY=$(BUILD_CANARY)/$(APP)
+
+## Targets 
+.PHONY: check-env prepare all install 
+all: check-env prepare build install
+
+check-env:
+ifndef APP
+  $(error APP is not defined)
+endif
+ifndef APP_TARGET_ROOT
+	$(error APP_TARGET_ROOT is not defined)
+endif
+
+prepare: check-env
+	$(MKDIRHIER) $(APP_TARGET_ROOT)  
+	$(MKDIRHIER) $(BUILD_CANARY) 
+
+build: check-env
+	$(REBAR) compile
+
+install: check-env	
+	$(RM) -f $(APP_TARGET_ROOT)/$(APP)
+	$(LN) -s $(APP_SOURCE_ROOT) $(APP_TARGET_ROOT)/$(APP)
+
+clean: check-env 
+	$(RM) -f $(APP_TARGET_ROOT)/$(APP)
+	$(RM) -rf ebin/  
+	$(REBAR) clean   
+
