@@ -2,7 +2,7 @@
 
 ## Installing 3rdparty dependencies  
 
-### Installing erlang (https://github.com/yrashk/kerl). 
+### Installing erlang
 
 The following commands will install Erlang version r16b03-1 in /opt/erlang/r16b03-1. Before running please substitute USERNAME with your actual username. 
 
@@ -33,5 +33,7 @@ Change to kompott source root, setup the build environemt, and build 3rdparty de
   $ cd kompott
   $ . setup
   $ cd deps 
+  $ make
+  $ cd ../backend 
   $ make
 ```
