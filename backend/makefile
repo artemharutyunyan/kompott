@@ -1,4 +1,4 @@
-DIRS = ttfw ttcore
+DIRS = ttcommon ttfw ttcore
 
 .PHONY: all clean 
 
