@@ -1,4 +1,4 @@
-DIRS = rebar cowlib ranch cowboy goldrush lager
+DIRS = rebar cowlib ranch cowboy goldrush lager jsx
 
 .PHONY: all clean 
 
