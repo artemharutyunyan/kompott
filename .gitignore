@@ -1,0 +1,4 @@
+  backend/**/ebin/
+  build/*
+  deps/**/tmp/
+
