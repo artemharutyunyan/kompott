@@ -1,4 +1,4 @@
-DIRS = rebar cowlib ranch cowboy goldrush lager jsx meck protobuffs riak_pb riak-erlang-client
+DIRS = rebar cowlib ranch cowboy goldrush lager jsx meck protobuffs riak_pb riakc
 
 .PHONY: all clean
 
