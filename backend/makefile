@@ -2,7 +2,7 @@ DIRS = ttcommon ttfw ttcore
 
 .PHONY: all clean 
 
-all: 
+all:
 	for d in $(DIRS); do (cd $$d; make) || exit 1 ; done
 
 clean:

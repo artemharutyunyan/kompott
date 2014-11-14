@@ -17,3 +17,8 @@
 
 ## Tweak GC to run more often
 ##-env ERL_FULLSWEEP_AFTER 10
+
+
+
+## Specify where mnesia stores the content 
+-mnesia dir "/opt/kompott/mnesia"
