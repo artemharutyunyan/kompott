@@ -1,4 +1,6 @@
-DIRS = rebar cowlib ranch cowboy goldrush lager jsx meck protobuffs riak_pb riakc
+DIRS = rebar cowlib ranch cowboy goldrush lager jsx meck protobuffs riak_pb riakc \
+		 quickrand uuid
+
 
 .PHONY: all clean
 
