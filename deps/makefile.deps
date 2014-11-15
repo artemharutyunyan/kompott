@@ -53,7 +53,9 @@ $(CANARY).unpack:
 	$(TOUCH) $@
 
 $(CANARY).build:
-	if [ -f $(PACKAGE_SOURCE_ROOT)/rebar.config ] && [ -f "$(REBAR)" ]; then \
+	if [ -f $(PACKAGE_SOURCE_ROOT)/rebar ] && [ -f $(PACKAGE_SOURCE_ROOT)/rebar.config ]; then \
+		$(CD) $(PACKAGE_SOURCE_ROOT) && ./rebar compile; \
+	elif [ -f $(PACKAGE_SOURCE_ROOT)/rebar.config ] && [ -f "$(REBAR)" ]; then \
 		$(CD) $(PACKAGE_SOURCE_ROOT) && $(REBAR) compile; \
 	else \
 		$(CD) $(PACKAGE_SOURCE_ROOT) && make; \
@@ -68,11 +70,11 @@ $(CANARY).install:
 $(CANARY).post-install:
 $(CANARY).clean:
 
-### Actual build targets
 clean: $(CANARY).clean
 	$(RM) -rf $(CANARY).prepare $(CANARY).unpack $(CANARY).build $(CANARY).install $(CANARY).post-install
 	$(RM) -rf $(WD)
 
+### Actual build targets
 prepare: $(CANARY).prepare
 unpack: $(CANARY).unpack
 build: $(CANARY).build
