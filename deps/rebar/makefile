@@ -1,6 +1,6 @@
 ### Local (package specific) variables 
 PACKAGE_NAME=rebar
-PACKAGE_VERSION=2.0.0
+PACKAGE_VERSION=2.1.0-pre
 PACKAGE_EXT=tar.gz
 
 include ../makefile.deps

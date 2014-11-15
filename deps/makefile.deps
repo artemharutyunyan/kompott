@@ -1,6 +1,6 @@
-### Commands 
+### Commands
 MKDIRHIER = $(FILTER) mkdir -p
-TAR = $(FILTER) tar 
+TAR = $(FILTER) tar
 TOUCH = $(FILTER) touch
 REBAR = $(FILTER)$(shell which rebar)
 CD = $(FILTER) cd
@@ -8,21 +8,21 @@ LN = $(FILTER) ln
 PWD=$(shell pwd)
 MAKE=$(FILTER) make
 
-## Variable definitions 
+## Variable definitions
 
-### Globbal 
+### Globbal
 WD=$(PWD)/tmp/
 SRC_ROOT=$(PWD)/src/
 
 ERL_DEPS_BUILD_CANARY=$(ERL_DEPS_TARGET_ROOT)/_canary
 
-### Package specific variables 
+### Package specific variables
 PACKAGE=$(PACKAGE_NAME)-$(PACKAGE_VERSION).$(PACKAGE_EXT)
 PACKAGE_SOURCE_ROOT=$(WD)/$(PACKAGE_NAME)-$(PACKAGE_VERSION)
 CANARY=$(ERL_DEPS_BUILD_CANARY)/$(PACKAGE)
 
-## Targets 
-.PHONY: prepare all  
+## Targets
+.PHONY: prepare all
 all: prepare unpack build install post-install
 
 check-env:
@@ -40,11 +40,11 @@ ifndef PACKAGE_EXT
 endif
 
 ### Canary targets (files)
-$(CANARY).prepare:	
-	$(MKDIRHIER) $(ERL_DEPS_TARGET_ROOT) 
-	$(MKDIRHIER) $(ERL_DEPS_TARGET_BIN) 
+$(CANARY).prepare:
+	$(MKDIRHIER) $(ERL_DEPS_TARGET_ROOT)
+	$(MKDIRHIER) $(ERL_DEPS_TARGET_BIN)
 	$(MKDIRHIER) $(ERL_DEPS_BUILD_CANARY)
-	$(MKDIRHIER) $(WD) 
+	$(MKDIRHIER) $(WD)
 	$(MKDIRHIER) $(ERL_DEPS_BUILD_CANARY)
 	$(TOUCH) $@
 
@@ -60,7 +60,7 @@ $(CANARY).build:
 	fi
 	$(TOUCH) $@
 
-$(CANARY).install:	
+$(CANARY).install:
 	$(RM) -f $(ERL_DEPS_TARGET_ROOT)/$(PACKAGE_NAME)
 	$(LN) -s $(PACKAGE_SOURCE_ROOT) $(ERL_DEPS_TARGET_ROOT)/$(PACKAGE_NAME)
 	$(TOUCH) $@
@@ -68,14 +68,14 @@ $(CANARY).install:
 $(CANARY).post-install:
 $(CANARY).clean:
 
-### Actual build targets 
+### Actual build targets
 clean: $(CANARY).clean
-	$(RM) -rf $(CANARY).prepare $(CANARY).unpack $(CANARY).build $(CANARY).install $(CANARY).post-install 
-	$(RM) -rf $(WD) 
+	$(RM) -rf $(CANARY).prepare $(CANARY).unpack $(CANARY).build $(CANARY).install $(CANARY).post-install
+	$(RM) -rf $(WD)
 
 prepare: $(CANARY).prepare
-unpack: $(CANARY).unpack 
+unpack: $(CANARY).unpack
 build: $(CANARY).build
 install: $(CANARY).install
-post-install: $(CANARY).post-install 
+post-install: $(CANARY).post-install
 
