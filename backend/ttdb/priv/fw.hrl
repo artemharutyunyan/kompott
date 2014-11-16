@@ -4,12 +4,18 @@
 %%
 %% --------------------------------------------------------------------------
 
+%%
 %% Constants
+
 -define(RIAK_HOST, "127.0.0.1").
 -define(RIAK_PORT, 8087).
+
 -define(CUSTOMER_BUCKET, <<"tt_customer">>).
+-define(DEVICE_BUCKET, <<"tt_device">>).
+
+-define(CUSTOMER_DEVICE_SET_BUCKET, {<<"sets">>, <<"tt_customer_devices">>}).
 
 %% Records
--record(customer, {name, uuid, date}).
-
+-record(customer, {name, uuid, creation_time}).
+-record(device, {name, uuid, creation_time}).
 
