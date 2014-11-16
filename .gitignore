@@ -2,3 +2,4 @@ backend/**/ebin/
 build/*
 deps/**/tmp/*
 *.swp
+ttnode/ttnode*
