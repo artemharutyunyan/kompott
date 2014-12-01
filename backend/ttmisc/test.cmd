@@ -5,10 +5,12 @@ rd(release, {name, uuid, creation_time, version, files}).
 
 fw:customer_add(#customer{name = acme3}).
 
+# Device
 fw:device_add(#customer{uuid="773b00e3-8363-4ff5-ae99-ae160dbed1bd"}, #device{name=dev1}).
-
 fw:device_get(#customer{uuid="773b00e3-8363-4ff5-ae99-ae160dbed1bd"}).
 
+# Package
+fw:package_add(#customer{uuid="773b00e3-8363-4ff5-ae99-ae160dbed1bd"}, #device{uuid="206f657b-8fe2-4af8-b0c0-c1ccdb9cc5ab"}, #package{name=acmepkg}.
 fw:package_get(#customer{uuid="773b00e3-8363-4ff5-ae99-ae160dbed1bd"}, #device{uuid="206f657b-8fe2-4af8-b0c0-c1ccdb9cc5ab"}).
 
 # Release
