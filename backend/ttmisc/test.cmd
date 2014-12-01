@@ -9,3 +9,12 @@ fw:device_add(#customer{uuid="773b00e3-8363-4ff5-ae99-ae160dbed1bd"}, #device{na
 
 fw:device_get(#customer{uuid="773b00e3-8363-4ff5-ae99-ae160dbed1bd"}).
 
+fw:package_get(#customer{uuid="773b00e3-8363-4ff5-ae99-ae160dbed1bd"}, #device{uuid="206f657b-8fe2-4af8-b0c0-c1ccdb9cc5ab"}).
+
+# Release
+R = #release{files = ["/foo/bar1", "/bar/baz2"], version=1, name="sandy"}.
+fw:release_add(#customer{uuid="773b00e3-8363-4ff5-ae99-ae160dbed1bd"}, #device{uuid="206f657b-8fe2-4af8-b0c0-c1ccdb9cc5ab"}, #package{uuid="e8ab741f-da19-4935-95ef-c07b020d92c8"}, R).
+fw:release_get(#customer{uuid="773b00e3-8363-4ff5-ae99-ae160dbed1bd"}, #device{uuid="206f657b-8fe2-4af8-b0c0-c1ccdb9cc5ab"}, #package{uuid="e8ab741f-da19-4935-95ef-c07b020d92c8"}).
+
+
+

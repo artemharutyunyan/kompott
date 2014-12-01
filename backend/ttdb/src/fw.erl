@@ -7,7 +7,7 @@
 -include("priv/fw.hrl").
 
 -export([customer_add/1, device_add/2, package_add/3, release_add/4]).
--export([device_get/1]).
+-export([device_get/1, package_get/2, release_get/3]).
 
 %%
 %% Public functions
@@ -61,43 +61,29 @@ release_add(#customer{} = Customer, #device{} = Device, #package{} = Package, #r
         [Release#release.name, UUID, Package#package.uuid, Device#device.uuid, Customer#customer.uuid]),
     R = Release#release{uuid = UUID, creation_time = ttcommon:utc_timestamp()},
     %% Add release to releases bucket
-    ReleaseObj = riakc_obj:new(?RELEASE_BUCKET, release_key(Customer, Device, Package, R)),
+    ReleaseObj = riakc_obj:new(?RELEASE_BUCKET, release_key(Customer, Device, Package, R), R),
     ok = riakc_pb_socket:put(Pid, ReleaseObj),
     %% Add a release to package's set of releases
     ok = add_release_to_package_set(Customer, Device, Package, R).
 
 %% Retrieves the list of devices for a given customer
 device_get(#customer{} = Customer) ->
-    {ok, Pid} = get_riak_connection(),
-    case riakc_pb_socket:fetch_type(Pid, ?CUSTOMER_DEVICE_SET_BUCKET, customer_device_set_key(Customer)) of
-        {ok, Set} ->
-            set_to_list(Set);
-        {error, {notfound, set}} ->
-            lager:info("No devices found for customer ~p", [Customer#customer.uuid]),
-            [];
-        _ ->
-            throw(unexpected_fetch_type_return)
-    end.
+    S = get_customer_device_set(Customer),
+    set_element_retrieve(S, ?DEVICE_BUCKET).
+
+%% Retrieves the list of packages for a given customer/device combination
+package_get(#customer{} = Customer, #device{} = Device) ->
+    S = get_device_package_set(Customer, Device),
+    set_element_retrieve(S, ?PACKAGE_BUCKET).
+
+%% Retrives the list of releases for a given customer/device/package combination
+release_get(#customer{} = Customer, #device{} = Device, #package{} = Package) ->
+    S = get_package_release_set(Customer, Device, Package),
+    set_element_retrieve(S, ?RELEASE_BUCKET).
 
 %%
 %% Internal functions
 %%
-
-%% Auxiliary function for adding a release to to package's release set
-add_release_to_package_set(#customer{} = Customer, #device{} = Device, #package{} = Package, #release{} = Release) ->
-    {ok, Pid} = get_riak_connection(),
-    S = get_package_release_set(Customer, Device, Package),
-    Set = riakc_set:add_element(release_key(Customer, Device, Package, Release), S),
-    Key = package_release_set_key(Customer, Device, Package),
-    ok = riakc_pb_socket:update_type(Pid, ?PACKAGE_RELEASE_SET_BUCKET, Key, riakc_set:to_op(Set)).
-
-%% Auxiliary function for adding a package to device's package set
-add_package_to_device_set(#customer{} = Customer, #device{} = Device, #package{} = Package) ->
-    {ok, Pid} = get_riak_connection(),
-    S = get_device_package_set(Customer, Device),
-    Set = riakc_set:add_element(package_key(Customer, Device, Package), S),
-    Key = device_package_set_key(Customer, Device),
-    ok = riakc_pb_socket:update_type(Pid, ?DEVICE_PACKAGE_SET_BUCKET, Key, riakc_set:to_op(Set)).
 
 %% Auxiliary function for adding device to customer's device bucket set
 add_device_to_customer_set(#customer{} = Customer, #device{} = Device) ->
@@ -107,14 +93,21 @@ add_device_to_customer_set(#customer{} = Customer, #device{} = Device) ->
     Key = customer_device_set_key(Customer),
     ok = riakc_pb_socket:update_type(Pid, ?CUSTOMER_DEVICE_SET_BUCKET, Key, riakc_set:to_op(Set)).
 
-%% Convert a riak client set to list
-set_to_list(Set) ->
+%% Auxiliary function for adding a package to device's package set
+add_package_to_device_set(#customer{} = Customer, #device{} = Device, #package{} = Package) ->
     {ok, Pid} = get_riak_connection(),
-    F = fun(DeviceKey, DeviceList) ->
-            {ok, Device} = riakc_pb_socket:get(Pid, ?DEVICE_BUCKET, DeviceKey),
-            [binary_to_term(riakc_obj:get_value(Device))| DeviceList]
-    end,
-    riakc_set:fold(F, [], Set).
+    S = get_device_package_set(Customer, Device),
+    Set = riakc_set:add_element(package_key(Customer, Device, Package), S),
+    Key = device_package_set_key(Customer, Device),
+    ok = riakc_pb_socket:update_type(Pid, ?DEVICE_PACKAGE_SET_BUCKET, Key, riakc_set:to_op(Set)).
+
+%% Auxiliary function for adding a release to to package's release set
+add_release_to_package_set(#customer{} = Customer, #device{} = Device, #package{} = Package, #release{} = Release) ->
+    {ok, Pid} = get_riak_connection(),
+    S = get_package_release_set(Customer, Device, Package),
+    Set = riakc_set:add_element(release_key(Customer, Device, Package, Release), S),
+    Key = package_release_set_key(Customer, Device, Package),
+    ok = riakc_pb_socket:update_type(Pid, ?PACKAGE_RELEASE_SET_BUCKET, Key, riakc_set:to_op(Set)).
 
 %% Auxiliary function for retrieving the bucket set where package's releases are kept
 get_package_release_set(#customer{} = Customer, #device{} = Device, #package{} = Package) ->
@@ -128,7 +121,8 @@ get_package_release_set(#customer{} = Customer, #device{} = Device, #package{} =
         {error, {notfound, set}} ->
             %% Set does not exist. Create an empty set an return it.
             lager:info("Creating release set for package ~p, device ~p, customer ~p",
-                [Package#package.uuid, Device#device.uuid, Customer#customer.uuid]);
+                [Package#package.uuid, Device#device.uuid, Customer#customer.uuid]),
+            riakc_set:new();
         _ ->
             throw(unexpected_fetch_type_return)
     end.
@@ -192,4 +186,14 @@ device_package_set_key(#customer{} = Customer, #device{} = Device) ->
 
 package_release_set_key(#customer{} = Customer, #device{} = Device, #package{} = Package) ->
     list_to_binary(Customer#customer.uuid ++ "_" ++ Device#device.uuid ++ "_" ++ Package#package.uuid ++ "_release_set").
+
+%% Convert a riak client set to list
+set_element_retrieve(Set, Bucket) ->
+    {ok, Pid} = get_riak_connection(),
+    F = fun(Key, List) ->
+            {ok, Elem} = riakc_pb_socket:get(Pid, Bucket, Key),
+            [binary_to_term(riakc_obj:get_value(Elem))| List]
+    end,
+    riakc_set:fold(F, [], Set).
+
 
