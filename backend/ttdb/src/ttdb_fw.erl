@@ -3,8 +3,8 @@
 %% fw.erl: firmware module implementation
 %%
 %% --------------------------------------------------------------------------
--module(fw).
--include("priv/fw.hrl").
+-module(ttdb_fw).
+-include("priv/ttdb_fw.hrl").
 
 -export([customer_add/1, device_add/2, package_add/3, release_add/4]).
 -export([device_get/1, package_get/2, release_get/3]).
