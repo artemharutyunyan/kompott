@@ -12,7 +12,8 @@
 start(_StartType, _StartArgs) ->
     Dispatch = cowboy_router:compile([
         {'_', [
-                {"/", ttfw_packages, []}
+                {"/v1/customers/:customer/devices/[:deviceId]", ttfw_devices, []},
+                {"/v1/customers/:customer/devices/:deviceId/packages/[:packageId]", ttfw_packages, []}
               ]
         }
     ]),
