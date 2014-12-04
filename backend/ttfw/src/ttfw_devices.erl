@@ -46,7 +46,11 @@ devices_to_json(Request, State) ->
     {Body, Request, State}.
 
 devices_from_json(Request, State) ->
-    lager:info("Reached here. Customer is: ~p,"),
-    {{<<"\{\}">>}, Request, State}.
+    {Customer, _} = cowboy_req:binding(customer, Request),
+    {DeviceId, _} = cowboy_req:binding(deviceId, Request),
+    lager:info("Reached here. Customer is: ~p, deviceId is: ~p", [Customer, DeviceId]),
+    Body = <<"\{\"result\":\"ok\"\}">>,
+    Req2 = cowboy_req:set_resp_body(Body, Request),
+    {true, Req2, State}.
 
 

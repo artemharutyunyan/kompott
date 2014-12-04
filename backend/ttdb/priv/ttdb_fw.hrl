@@ -25,3 +25,6 @@
 -record(package, {name, uuid, creation_time, update_time, latest_release}).
 -record(release, {name, uuid, creation_time, version, files}).
 
+%% State definitions
+-record(fw_state, {db_connection, connected = false}).
+
