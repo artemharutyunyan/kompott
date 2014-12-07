@@ -1,8 +1,10 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Module for handling requests to devices/ endpoint.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
 -module(ttfw_devices).
+
+-include_lib("ttdb/include/ttdb.hrl").
+-include("priv/ttfw.hrl").
 
 %% Cowboy callbacks
 -export([init/3]).
@@ -32,11 +34,11 @@ content_types_provided(Request, State) ->
      ],
      Request, State}.
 
-content_types_accepted(Request, State) ->
+content_types_accepted(Request, _) ->
     {[
         {<<"application/json">>, devices_from_json}
      ],
-     Request, State}.
+     Request, #dev_req_state{}}.
 
 is_authorized(Request, State) ->
     {true, Request, State}.
@@ -46,11 +48,71 @@ devices_to_json(Request, State) ->
     {Body, Request, State}.
 
 devices_from_json(Request, State) ->
+    % Extract request parameters
+    {DeviceDesc, Request2, State2} = extract_request_params(Request, State),
+    % Validate request parameters
+    F = fun(Elem) -> validate_request_params(Elem, DeviceDesc) end,
+    lists:map(F, get_input_desc()),
+
+    % Add device to the database
+    case ttdb:device_add(DeviceDesc) of
+        ok ->
+            lager:info("Added device ~p for customer ~p (ID:~p)",
+                [DeviceDesc#tt_device.name, DeviceDesc#tt_device.customer, DeviceDesc#tt_device.id]),
+            Body = <<"\{\"result\":\"ok\"\}">>,
+            Request3 = cowboy_req:set_resp_body(Body, Request2);
+        {error, id_exists}  ->
+            lager:error("Could not process add device ~p for customer ~p. Id already exists (ID:~p)",
+                [DeviceDesc#tt_device.name, DeviceDesc#tt_device.customer, DeviceDesc#tt_device.id]),
+            Body = <<"\{\"result\":\"error\", \"message\": \"Could not add device. ID already exists.\"\}">>,
+            Request3 = cowboy_req:set_resp_body(Body, Request2)
+    end,
+    {true, Request3, State2}.
+
+%%
+%% Internal functions
+
+%% Returns the list of input parameters.
+get_input_desc() ->
+    [{customer, mandatory}, {id, mandatory}, {name, mandatory}, {description, mandatory}].
+
+%% Extracts input parameters from request
+extract_request_params(Request, State) ->
+    AppendParam = fun(ParamName, {#tt_device{} = D, R, S}) -> extract(ParamName, {D, R, S}) end,
+    lists:foldl(AppendParam, {#tt_device{}, Request, State}, get_input_desc()).
+
+%% Extracts an individual parameter from request
+extract({customer, _}, {#tt_device{} = DeviceDesc, Request, State}) ->
     {Customer, _} = cowboy_req:binding(customer, Request),
+    {DeviceDesc#tt_device{ customer = binary_to_list(Customer)}, Request, State};
+extract({id, _}, {#tt_device{} = DeviceDesc, Request, State}) ->
     {DeviceId, _} = cowboy_req:binding(deviceId, Request),
-    lager:info("Reached here. Customer is: ~p, deviceId is: ~p", [Customer, DeviceId]),
-    Body = <<"\{\"result\":\"ok\"\}">>,
-    Req2 = cowboy_req:set_resp_body(Body, Request),
-    {true, Req2, State}.
+    {DeviceDesc#tt_device{id = binary_to_list(DeviceId)}, Request, State};
+extract({name, _}, {#tt_device{} = DeviceDesc, Request, State}) ->
+    {Value, Request2, State2} = extract_param_from_json(<<"name">>, Request, State),
+    {DeviceDesc#tt_device{name = Value}, Request2, State2};
+extract({description, _}, {#tt_device{} = DeviceDesc, Request, State}) ->
+    {Value, Request2, State2} = extract_param_from_json(<<"description">>, Request, State),
+    {DeviceDesc#tt_device{description = Value}, Request2, State2}.
 
+%% Extracts value of the given key from JSON body and stores parsed JSON
+extract_param_from_json(Name, Request, #dev_req_state{parsed_body = undefined} = State) ->
+    {ok, Body, Request2} = cowboy_req:body(Request),
+    JSON = jsx:decode(Body),
+    Value = proplists:get_value(Name, JSON),
+    {Value, Request2, State#dev_req_state{parsed_body = JSON}};
+extract_param_from_json(Name, Request, State) ->
+    Value = proplists:get_value(Name, State#dev_req_state.parsed_body),
+    {Value, Request, State}.
 
+%% Validate request parameters
+validate_request_params({name, mandatory}, #tt_device{name = undefined}) ->
+   throw(bad_request);
+validate_request_params({customer, mandatory}, #tt_device{customer = undefined}) ->
+   throw(bad_request);
+validate_request_params({description, mandatory}, #tt_device{description = undefined}) ->
+   throw(bad_request);
+validate_request_params({id, mandatory}, #tt_device{id = undefined}) ->
+   throw(bad_request);
+validate_request_params(_, _) ->
+    ok.

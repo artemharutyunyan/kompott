@@ -92,7 +92,7 @@ device_add(#customer{} = Customer, #device{} = Device, State) ->
         {ok, UUIDObj} ->
             %% Device already exists
             Val = binary_to_term(riakc_obj:get_value(UUIDObj)),
-            lager:warning("Device with ID:~p/Customer:~p already exists (UUID: ~p). Failed to add",
+            lager:error("Device with ID:~p/Customer:~p already exists (UUID: ~p). Failed to add device.",
                 [Device#device.external_id, Customer#customer.uuid, Val]),
             {error, ?E_ID_EXIST}
     end.
