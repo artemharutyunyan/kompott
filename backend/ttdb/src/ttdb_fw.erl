@@ -1,7 +1,5 @@
 %% --------------------------------------------------------------------------
-%%
-%% fw.erl: firmware module implementation
-%%
+%% ttdb_fw.erl: firmware module implementation
 %% --------------------------------------------------------------------------
 -module(ttdb_fw).
 -behaviour(gen_server).
@@ -9,29 +7,40 @@
 -include("priv/ttdb_fw.hrl").
 
 %% interface callbacks
--export([start_link/1]).
+-export([start_link/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 %% Internal functions
--export([customer_add/2, device_add/3, package_add/4, release_add/5]).
+-export([customer_add/2, package_add/4, release_add/5]).
 -export([device_get/2, package_get/3, release_get/4]).
 
 %%
 %% interface callback implementations
-start_link(Options) ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [Options], []).
+start_link() ->
+    gen_server:start({local, ?DAEMON_NAME}, ?MODULE, [], []).
 
 %%
 %% gen_server callback implementations
-init(Options) ->
-    lager:info("Starting ~p with ~p", [?MODULE, Options]),
+init(_) ->
     {ok, Pid} = riakc_pb_socket:start_link(?RIAK_HOST, ?RIAK_PORT),
-    {ok, #fw_state{db_connection = Pid, connected = true}}.
+    {ok, #fw_state{connected = true, db_connection = Pid}}.
 
-handle_call(_Request, _From, State) ->
-    {reply, {}, State}.
+handle_call(_Command, _From, #fw_state{ connected = false} = State) ->
+    {reply, {error, ?E_DB_CONN}, State};
+handle_call({device_add, #tt_device{} = TtDevice}, _From, #fw_state{} = State) ->
+    %% Map request parameters to internal data structures
+    Customer = #customer{uuid = TtDevice#tt_device.customer},
+    Device = #device{
+                       description = TtDevice#tt_device.description,
+                       external_id = TtDevice#tt_device.id,
+                              name = TtDevice#tt_device.name
+                    },
+    {reply, device_add(Customer, Device, State), State};
+handle_call(Request, _From, State) ->
+    lager:warning("Unexpected request ~p in ~p:handle_call", [Request, ?MODULE]),
+    {reply, {error, ?E_BAD_REQ}, State}.
 
 handle_cast(_Message, State) ->
     {noreply, State}.
@@ -64,15 +73,29 @@ customer_add(#customer{} = Customer, State) ->
 %% customer's device set.
 device_add(#customer{} = Customer, #device{} = Device, State) ->
     {ok, Pid} = get_riak_connection(State),
-    %% Create a device and add it to the device bucket
-    UUID = uuid:uuid_to_string(uuid:get_v4()),
-    lager:info("Adding device ~p (UUID ~p).", [Device#device.name, UUID]),
-    D = Device#device{uuid = UUID, creation_time = ttcommon:utc_timestamp()},
-    %% Add device object to the device bucket
-    DeviceObj = riakc_obj:new(?DEVICE_BUCKET, device_key(Customer, D), D),
-    ok = riakc_pb_socket:put(Pid, DeviceObj),
-    %% Add a device to customer's set of devices
-    ok = add_device_to_customer_set(Customer, D, State).
+    %% Make sure that customer/external_id combination is unique
+    IdMap = device_external_id_map_key(Customer, Device),
+    case riakc_pb_socket:get(Pid, ?DEVICE_ID_UUID_MAP_BUCKET, IdMap) of
+        {error, notfound} ->
+            %% Create a device and add it to the device bucket
+            UUID = uuid:uuid_to_string(uuid:get_v4()),
+            lager:info("Adding device ~p (UUID ~p).", [Device#device.name, UUID]),
+            D = Device#device{uuid = UUID, creation_time = ttcommon:utc_timestamp()},
+            %% Add device object to the device bucket
+            DeviceObj = riakc_obj:new(?DEVICE_BUCKET, device_key(Customer, D), D),
+            ok = riakc_pb_socket:put(Pid, DeviceObj),
+            %% Add mapping between external device Id and internal UUID
+            DeviceIdMapObj = riakc_obj:new(?DEVICE_ID_UUID_MAP_BUCKET, IdMap, UUID),
+            ok = riakc_pb_socket:put(Pid, DeviceIdMapObj),
+            %% Add a device to customer's set of devices
+            ok = add_device_to_customer_set(Customer, D, State);
+        {ok, UUIDObj} ->
+            %% Device already exists
+            Val = binary_to_term(riakc_obj:get_value(UUIDObj)),
+            lager:warning("Device with ID:~p/Customer:~p already exists (UUID: ~p). Failed to add",
+                [Device#device.external_id, Customer#customer.uuid, Val]),
+            {error, ?E_ID_EXIST}
+    end.
 
 %% Creates an entry in the package bucket and adds the packadg to
 %% device's package set
@@ -207,6 +230,9 @@ customer_key(#customer{} = Customer) ->
 device_key(#customer{} = Customer, #device{} = Device) ->
     list_to_binary(Customer#customer.uuid ++ "_" ++ Device#device.uuid).
 
+device_external_id_map_key(#customer{} = Customer, #device{} = Device) ->
+    list_to_binary(Customer#customer.uuid ++ "_" ++ Device#device.external_id).
+
 package_key(#customer{} = Customer, #device{} = Device, #package{} = Package) ->
     list_to_binary(Customer#customer.uuid ++ "_" ++ Device#device.uuid ++ "_" ++ Package#package.uuid).
 
@@ -234,3 +260,4 @@ set_element_retrieve(Set, Bucket, State) ->
 
 get_riak_connection(#fw_state{ db_connection = Pid}) ->
     {ok, Pid}.
+

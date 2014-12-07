@@ -23,7 +23,8 @@ start_link() ->
 %% Supervisor callbacks
 %% ===================================================================
 
-init([]) ->
+init(_) ->
     FW = [?CHILD(ttdb_fw, worker)],
     {ok, {{one_for_one, 5, 10}, FW }}.
+
 
