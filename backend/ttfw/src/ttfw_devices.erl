@@ -20,7 +20,7 @@
 %%
 %% Cowboy callbacks
 init(_Transport, _Request, []) ->
-  {upgrade, protocol, cowboy_rest}.
+    {upgrade, protocol, cowboy_rest}.
 
 allowed_methods(Request, State) ->
     {[<<"GET">>, <<"HEAD">>, <<"OPTIONS">>, <<"POST">>], Request, State}.
@@ -43,16 +43,32 @@ content_types_accepted(Request, _) ->
 is_authorized(Request, State) ->
     {true, Request, State}.
 
+%% GET handler
 devices_to_json(Request, State) ->
-    Body = <<"\{\"result\":\"ok\"\}">>,
-    {Body, Request, State}.
-
-devices_from_json(Request, State) ->
     % Extract request parameters
-    {DeviceDesc, Request2, State2} = extract_request_params(Request, State),
+    {DeviceDesc, Request2, State2} = extract_GET_request_params(Request, State),
     % Validate request parameters
     F = fun(Elem) -> validate_request_params(Elem, DeviceDesc) end,
     lists:map(F, get_input_desc()),
+
+    % Query the database
+    case ttdb:device_get(DeviceDesc) of
+        {ok, JSON} ->
+            Request3 = cowboy_req:set_resp_body(JSON, Request2);
+        _ ->
+            lager:error("Could not retrieve device information from the database"),
+            Body = <<"\{\"result\":\"error\", \"message\": \"Could not retrieve device information.\"\}">>,
+            Request3 = cowboy_req:set_resp_body(Body, Request2)
+    end,
+    {true, Request3, State2}.
+
+%% POST handler
+devices_from_json(Request, State) ->
+    % Extract request parameters
+    {DeviceDesc, Request2, State2} = extract_POST_request_params(Request, State),
+    % Validate request parameters
+    F = fun(Elem) -> validate_request_params(Elem, DeviceDesc) end,
+    lists:map(F, post_input_desc()),
 
     % Add device to the database
     case ttdb:device_add(DeviceDesc) of
@@ -72,14 +88,23 @@ devices_from_json(Request, State) ->
 %%
 %% Internal functions
 
-%% Returns the list of input parameters.
-get_input_desc() ->
+%% Returns the list of input parameters for the POST request.
+post_input_desc() ->
     [{customer, mandatory}, {id, mandatory}, {name, mandatory}, {description, mandatory}].
 
-%% Extracts input parameters from request
-extract_request_params(Request, State) ->
+%% Returns the list of input parameters for the GET request
+get_input_desc() ->
+    [{customer, mandatory}, {id, optional}].
+
+%% Extracts GET input parameters from request
+extract_GET_request_params(Request, State) ->
     AppendParam = fun(ParamName, {#tt_device{} = D, R, S}) -> extract(ParamName, {D, R, S}) end,
     lists:foldl(AppendParam, {#tt_device{}, Request, State}, get_input_desc()).
+
+%% Extracts POST input parameters from request
+extract_POST_request_params(Request, State) ->
+    AppendParam = fun(ParamName, {#tt_device{} = D, R, S}) -> extract(ParamName, {D, R, S}) end,
+    lists:foldl(AppendParam, {#tt_device{}, Request, State}, post_input_desc()).
 
 %% Extracts an individual parameter from request
 extract({customer, _}, {#tt_device{} = DeviceDesc, Request, State}) ->

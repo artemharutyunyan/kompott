@@ -14,7 +14,7 @@
 
 %% Internal functions
 -export([customer_add/2, package_add/4, release_add/5]).
--export([device_get/2, package_get/3, release_get/4]).
+-export([package_get/3, release_get/4]).
 
 %%
 %% interface callback implementations
@@ -35,9 +35,16 @@ handle_call({device_add, #tt_device{} = TtDevice}, _From, #fw_state{} = State) -
     Device = #device{
                        description = TtDevice#tt_device.description,
                        external_id = TtDevice#tt_device.id,
-                              name = TtDevice#tt_device.name
+                              name = TtDevice#tt_device.name,
+                       customer_id = TtDevice#tt_device.customer
                     },
     {reply, device_add(Customer, Device, State), State};
+handle_call({device_get, #tt_device{} = TtDevice}, _from, #fw_state{} = State) ->
+    %% Map request parameters to internal data structures
+    Customer = #customer{uuid = TtDevice#tt_device.customer},
+    Device = #device{external_id = TtDevice#tt_device.id},
+    {reply, device_get(Customer, Device, State), State};
+
 handle_call(Request, _From, State) ->
     lager:warning("Unexpected request ~p in ~p:handle_call", [Request, ?MODULE]),
     {reply, {error, ?E_BAD_REQ}, State}.
@@ -128,9 +135,31 @@ release_add(#customer{} = Customer, #device{} = Device, #package{} = Package, #r
     ok = add_release_to_package_set(Customer, Device, Package, R, State).
 
 %% Retrieves the list of devices for a given customer
-device_get(#customer{} = Customer, State) ->
+device_get(#customer{} = Customer, #device{uuid = undefined}, State) ->
+    %% Device ID not provided. Fetch all the devices for a given customer.
     S = get_customer_device_set(Customer, State),
-    set_element_retrieve(S, ?DEVICE_BUCKET, State).
+    set_element_retrieve(S, ?DEVICE_BUCKET, State);
+device_get(#customer{} = Customer, #device{} = Device, State) ->
+    {ok, Pid} = get_riak_connection(State),
+    %% Map an external ID (from request) to the internal UUID of the device
+    IdMap = device_external_id_map_key(Customer, Device),
+    case riakc_pb_socket:get(Pid, ?DEVICE_ID_UUID_MAP_BUCKET, IdMap) of
+        {error, notfound} ->
+            %% Did not find mapping entry
+            [];
+        {ok, UUIDObj} ->
+            %% Got the real UUID
+            UUID = binary_to_term(riakc_obj:get_value(UUIDObj)),
+            DeviceKey = device_key(Customer, Device#device{uuid = UUID}),
+            %% Fetch device object and return
+            case riakc_pb_socket:get(Pid, ?DEVICE_BUCKET, DeviceKey) of
+                {error, notfound} ->
+                    [];
+                {ok, DeviceObj} ->
+                    [binary_to_term(riakc_obj:get_value(DeviceObj))]
+            end
+    end.
+
 
 %% Retrieves the list of packages for a given customer/device combination
 package_get(#customer{} = Customer, #device{} = Device, State) ->

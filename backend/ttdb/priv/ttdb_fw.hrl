@@ -25,7 +25,7 @@
 
 %% Records
 -record(customer, {name, uuid, creation_time}).
--record(device, {name, uuid, external_id, description, creation_time, update_time}).
+-record(device, {name, uuid, customer_id, external_id, description, creation_time, update_time}).
 -record(package, {name, uuid, creation_time, update_time, latest_release}).
 -record(release, {name, uuid, creation_time, version, files}).
 

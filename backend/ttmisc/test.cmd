@@ -1,7 +1,11 @@
 rd(customer, {name, uuid, creation_time}).
-rd(device, {name, uuid, creation_time, update_time}).
+rd(device, {name, uuid, customer_id, external_id, description, creation_time, update_time}).
 rd(package, {name, uuid, creation_time, update_time, latest_release}).
 rd(release, {name, uuid, creation_time, version, files}).
+
+rd(tt_device, {name, id, customer, description}).
+
+ttdb:device_get(#tt_device{customer = "773b00e3-8363-4ff5-ae99-ae160dbed1bd"}).
 
 fw:customer_add(#customer{name = acme3}).
 
