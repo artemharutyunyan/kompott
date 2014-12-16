@@ -54,13 +54,12 @@ devices_to_json(Request, State) ->
     % Query the database
     case ttdb:device_get(DeviceDesc) of
         {ok, JSON} ->
-            Request3 = cowboy_req:set_resp_body(JSON, Request2);
-        _ ->
-            lager:error("Could not retrieve device information from the database"),
+            {jsx:encode(JSON), Request2, State2};
+        E ->
+            lager:error("Could not retrieve device (~p) information. Got ~p", [DeviceDesc, E]),
             Body = <<"\{\"result\":\"error\", \"message\": \"Could not retrieve device information.\"\}">>,
-            Request3 = cowboy_req:set_resp_body(Body, Request2)
-    end,
-    {true, Request3, State2}.
+            {Body, Request2, State2}
+    end.
 
 %% POST handler
 devices_from_json(Request, State) ->
@@ -111,8 +110,10 @@ extract({customer, _}, {#tt_device{} = DeviceDesc, Request, State}) ->
     {Customer, _} = cowboy_req:binding(customer, Request),
     {DeviceDesc#tt_device{ customer = binary_to_list(Customer)}, Request, State};
 extract({id, _}, {#tt_device{} = DeviceDesc, Request, State}) ->
-    {DeviceId, _} = cowboy_req:binding(deviceId, Request),
-    {DeviceDesc#tt_device{id = binary_to_list(DeviceId)}, Request, State};
+    case cowboy_req:binding(deviceId, Request) of
+        {undefined, _} -> {DeviceDesc#tt_device{id = undefined}, Request, State};
+        {DeviceId, _} -> {DeviceDesc#tt_device{id = binary_to_list(DeviceId)}, Request, State}
+    end;
 extract({name, _}, {#tt_device{} = DeviceDesc, Request, State}) ->
     {Value, Request2, State2} = extract_param_from_json(<<"name">>, Request, State),
     {DeviceDesc#tt_device{name = Value}, Request2, State2};

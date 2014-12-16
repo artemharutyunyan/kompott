@@ -29,6 +29,13 @@ init(_) ->
 
 handle_call(_Command, _From, #fw_state{ connected = false} = State) ->
     {reply, {error, ?E_DB_CONN}, State};
+
+%% customer add
+handle_call({customer_add, #tt_customer{} = TtCustomer}, _From, #fw_state{} = State) ->
+    Customer = #customer{name = TtCustomer#tt_customer.name},
+    {reply, customer_add(Customer, State), State};
+
+%% device add
 handle_call({device_add, #tt_device{} = TtDevice}, _From, #fw_state{} = State) ->
     %% Map request parameters to internal data structures
     Customer = #customer{uuid = TtDevice#tt_device.customer},
@@ -89,7 +96,7 @@ device_add(#customer{} = Customer, #device{} = Device, State) ->
             lager:info("Adding device ~p (UUID ~p).", [Device#device.name, UUID]),
             D = Device#device{uuid = UUID, creation_time = ttcommon:utc_timestamp()},
             %% Add device object to the device bucket
-            DeviceObj = riakc_obj:new(?DEVICE_BUCKET, device_key(Customer, D), D),
+            DeviceObj = riakc_obj:new(?DEVICE_BUCKET, device_key(Customer, D), term_to_binary(D)),
             ok = riakc_pb_socket:put(Pid, DeviceObj),
             %% Add mapping between external device Id and internal UUID
             DeviceIdMapObj = riakc_obj:new(?DEVICE_ID_UUID_MAP_BUCKET, IdMap, UUID),
@@ -134,11 +141,11 @@ release_add(#customer{} = Customer, #device{} = Device, #package{} = Package, #r
     %% Add a release to package's set of releases
     ok = add_release_to_package_set(Customer, Device, Package, R, State).
 
-%% Retrieves the list of devices for a given customer
-device_get(#customer{} = Customer, #device{uuid = undefined}, State) ->
+%% Retrieves devices of a given customer
+device_get(#customer{} = Customer, #device{external_id = undefined}, State) ->
     %% Device ID not provided. Fetch all the devices for a given customer.
     S = get_customer_device_set(Customer, State),
-    set_element_retrieve(S, ?DEVICE_BUCKET, State);
+    {ok, set_element_retrieve(S, ?DEVICE_BUCKET, State)};
 device_get(#customer{} = Customer, #device{} = Device, State) ->
     {ok, Pid} = get_riak_connection(State),
     %% Map an external ID (from request) to the internal UUID of the device
@@ -154,9 +161,11 @@ device_get(#customer{} = Customer, #device{} = Device, State) ->
             %% Fetch device object and return
             case riakc_pb_socket:get(Pid, ?DEVICE_BUCKET, DeviceKey) of
                 {error, notfound} ->
-                    [];
+                    {ok, []};
                 {ok, DeviceObj} ->
-                    [binary_to_term(riakc_obj:get_value(DeviceObj))]
+                    F = fun(#device{} = D) -> device_rec_to_proplist(D) end,
+                    L = lists:map(F, [binary_to_term(riakc_obj:get_value(DeviceObj))]),
+                    {ok, L}
             end
     end.
 
@@ -248,7 +257,8 @@ get_customer_device_set(#customer{} = Customer, State) ->
             %% Set does not exist. Create an empty set and return
             lager:info("Creating bucket set for customer ~p.", [Customer#customer.uuid]),
             riakc_set:new();
-        _ ->
+        E ->
+            lager:info("fetch_type returned ~p", [E]),
             throw(unexpected_fetch_type_return)
     end.
 
@@ -284,9 +294,27 @@ set_element_retrieve(Set, Bucket, State) ->
             {ok, Elem} = riakc_pb_socket:get(Pid, Bucket, Key),
             [binary_to_term(riakc_obj:get_value(Elem))| List]
     end,
-    riakc_set:fold(F, [], Set).
+    Devices = riakc_set:fold(F, [], Set),
+    C = fun(D) -> device_rec_to_proplist(D) end,
+    lists:map(C, Devices).
 
-
+%% Return riak connection handle
 get_riak_connection(#fw_state{ db_connection = Pid}) ->
     {ok, Pid}.
 
+%% Convert a device record to proplist
+device_rec_to_proplist(Device) ->
+    [{?NAME_KEY, format_value(Device#device.name)},
+     {?DESC_KEY, format_value(Device#device.description)},
+     {?ID_KEY, format_value(Device#device.external_id)},
+     {?UPDATE_KEY, format_value(Device#device.update_time)},
+     {?CREATION_KEY, format_value(Device#device.creation_time)}
+    ].
+
+%% Format output values
+format_value(Elem) when is_atom(Elem) ->
+    list_to_binary(atom_to_list(Elem));
+format_value(Elem) when is_integer(Elem) ->
+    Elem;
+format_value(Elem) ->
+    list_to_binary(Elem).
