@@ -316,5 +316,7 @@ format_value(Elem) when is_atom(Elem) ->
     list_to_binary(atom_to_list(Elem));
 format_value(Elem) when is_integer(Elem) ->
     Elem;
+format_value(Elem) when is_binary(Elem) ->
+    Elem;
 format_value(Elem) ->
     list_to_binary(Elem).

@@ -43,3 +43,5 @@ ttdb:device_get(#tt_device{customer="60a8c12f-9628-430d-801a-2d95e1d68d8e", id="
 
 curl --header "Content-Type: application/json"   127.0.0.1:8080/v1/customers/60a8c12f-9628-430d-801a-2d95e1d68d8e/deviceTypes/S0ME
 curl --header "Content-Type: application/json"   127.0.0.1:8080/v1/customers/60a8c12f-9628-430d-801a-2d95e1d68d8e/deviceTypes
+
+curl --include --request POST --header Content-Type: application/json --data-binary { "name": "Charging station.", "description": "No life without it" } 127.0.0.1:8080/v1/customers/cst/deviceTypes/as
