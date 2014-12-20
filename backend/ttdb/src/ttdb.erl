@@ -8,6 +8,7 @@
 %% Public functions
 -export([device_add/1, device_get/1]).
 -export([customer_add/1]).
+-export([authorize_request/1]).
 
 device_add(#tt_device{} = Device) ->
     gen_server:call(?DAEMON_NAME, {device_add, Device}, infinity).
@@ -17,3 +18,6 @@ device_get(#tt_device{} = Device) ->
 
 customer_add(#tt_customer{} = Customer) ->
     gen_server:call(?DAEMON_NAME, {customer_add, Customer}, infinity).
+
+authorize_request(_Device) ->
+    true.

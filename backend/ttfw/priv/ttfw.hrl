@@ -2,4 +2,6 @@
 %% ttfw.hrl: ttfw application definitions
 %% --------------------------------------------------------------------------
 
--record(dev_req_state, {parsed_body}).
+-define(TTFW_REALM, <<"Basic realm=\"kompott.am\"">>).
+
+-record(dev_req_state, {parsed_body, device_desc}).

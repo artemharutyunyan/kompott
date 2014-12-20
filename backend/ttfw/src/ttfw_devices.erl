@@ -8,11 +8,13 @@
 
 %% Cowboy callbacks
 -export([init/3]).
+-export([rest_init/2]).
 -export([known_methods/2]).
 -export([allowed_methods/2]).
+-export([malformed_request/2]).
+-export([is_authorized/2]).
 -export([content_types_provided/2]).
 -export([content_types_accepted/2]).
--export([is_authorized/2]).
 
 -export([devices_to_json/2]).
 -export([devices_from_json/2]).
@@ -22,11 +24,30 @@
 init(_Transport, _Request, []) ->
     {upgrade, protocol, cowboy_rest}.
 
-allowed_methods(Request, State) ->
-    {[<<"GET">>, <<"HEAD">>, <<"OPTIONS">>, <<"POST">>], Request, State}.
+rest_init(Request, []) ->
+    {ok, Request, #dev_req_state{}}.
 
 known_methods(Request, State) ->
-    {[<<"GET">>, <<"HEAD">>, <<"OPTIONS">>, <<"POST">>], Request, State}.
+    {[<<"GET">>, <<"POST">>], Request, State}.
+
+allowed_methods(Request, State) ->
+    {[<<"GET">>, <<"POST">>], Request, State}.
+
+malformed_request(Request, State) ->
+    try malformed_request_unsafe(Request, State) of
+        Ret -> Ret
+    catch
+        C:E ->
+            lager:warning("Got exception ~p:~p. Stacktrace ~p", [C, E, erlang:get_stacktrace()]),
+            {true, Request, State}
+    end.
+
+is_authorized(Request, State) ->
+    case ttdb:authorize_request(State#dev_req_state.device_desc) of
+        true -> {true, Request, State};
+        _ -> {{false, ?TTFW_REALM}, Request, State}
+    end.
+
 
 content_types_provided(Request, State) ->
     {[
@@ -34,40 +55,28 @@ content_types_provided(Request, State) ->
      ],
      Request, State}.
 
-content_types_accepted(Request, _) ->
+content_types_accepted(Request, State) ->
     {[
         {<<"application/json">>, devices_from_json}
      ],
-     Request, #dev_req_state{}}.
-
-is_authorized(Request, State) ->
-    {true, Request, State}.
+     Request, State}.
 
 %% GET handler
 devices_to_json(Request, State) ->
-    % Extract request parameters
-    {DeviceDesc, Request2, State2} = extract_GET_request_params(Request, State),
-    % Validate request parameters
-    F = fun(Elem) -> validate_request_params(Elem, DeviceDesc) end,
-    lists:map(F, get_input_desc()),
-
+    DeviceDesc = State#dev_req_state.device_desc,
     % Query the database
     case ttdb:device_get(DeviceDesc) of
         {ok, JSON} ->
-            {jsx:encode(JSON), Request2, State2};
+            {jsx:encode(JSON), Request, State};
         E ->
-            lager:error("Could not retrieve device (~p) information. Got ~p", [DeviceDesc, E]),
+            lager:warning("Could not retrieve device (~p) information. Got ~p", [DeviceDesc, E]),
             Body = <<"\{\"result\":\"error\", \"message\": \"Could not retrieve device information.\"\}">>,
-            {Body, Request2, State2}
+            {Body, Request, State}
     end.
 
 %% POST handler
 devices_from_json(Request, State) ->
-    % Extract request parameters
-    {DeviceDesc, Request2, State2} = extract_POST_request_params(Request, State),
-    % Validate request parameters
-    F = fun(Elem) -> validate_request_params(Elem, DeviceDesc) end,
-    lists:map(F, post_input_desc()),
+    DeviceDesc = State#dev_req_state.device_desc,
 
     % Add device to the database
     case ttdb:device_add(DeviceDesc) of
@@ -75,14 +84,14 @@ devices_from_json(Request, State) ->
             lager:info("Added device ~p for customer ~p (ID:~p)",
                 [DeviceDesc#tt_device.name, DeviceDesc#tt_device.customer, DeviceDesc#tt_device.id]),
             Body = <<"\{\"result\":\"ok\"\}">>,
-            Request3 = cowboy_req:set_resp_body(Body, Request2);
+            Request2 = cowboy_req:set_resp_body(Body, Request);
         {error, id_exists}  ->
-            lager:error("Could not process add device ~p for customer ~p. Id already exists (ID:~p)",
+            lager:warning("Could not process add device ~p for customer ~p. Id already exists (ID:~p)",
                 [DeviceDesc#tt_device.name, DeviceDesc#tt_device.customer, DeviceDesc#tt_device.id]),
             Body = <<"\{\"result\":\"error\", \"message\": \"Could not add device. ID already exists.\"\}">>,
-            Request3 = cowboy_req:set_resp_body(Body, Request2)
+            Request2 = cowboy_req:set_resp_body(Body, Request)
     end,
-    {true, Request3, State2}.
+    {true, Request2, State}.
 
 %%
 %% Internal functions
@@ -100,10 +109,24 @@ extract_GET_request_params(Request, State) ->
     AppendParam = fun(ParamName, {#tt_device{} = D, R, S}) -> extract(ParamName, {D, R, S}) end,
     lists:foldl(AppendParam, {#tt_device{}, Request, State}, get_input_desc()).
 
+%% Validates GET request params. Throws an exception in case of an error.
+validate_GET_request_params(Request, State) ->
+    {DeviceDesc, Request2, State2} = extract_GET_request_params(Request, State),
+    F = fun(Elem) -> validate_request_params(Elem, DeviceDesc) end,
+    lists:map(F, get_input_desc()),
+    {false, Request2, State2#dev_req_state{device_desc = DeviceDesc}}.
+
 %% Extracts POST input parameters from request
 extract_POST_request_params(Request, State) ->
     AppendParam = fun(ParamName, {#tt_device{} = D, R, S}) -> extract(ParamName, {D, R, S}) end,
     lists:foldl(AppendParam, {#tt_device{}, Request, State}, post_input_desc()).
+
+%% Validates POST request params. Throws an exception in case of an error.
+validate_POST_request_params(Request, State) ->
+    {DeviceDesc, Request2, State2} = extract_POST_request_params(Request, State),
+    F = fun(Elem) -> validate_request_params(Elem, DeviceDesc) end,
+    lists:map(F, post_input_desc()),
+    {false, Request2, State2#dev_req_state{device_desc = DeviceDesc}}.
 
 %% Extracts an individual parameter from request
 extract({customer, _}, {#tt_device{} = DeviceDesc, Request, State}) ->
@@ -142,3 +165,12 @@ validate_request_params({id, mandatory}, #tt_device{id = undefined}) ->
    throw(bad_request);
 validate_request_params(_, _) ->
     ok.
+
+%% Unsafe version of malformed_request/2 callback. Throws an exception in case of error.
+malformed_request_unsafe(Request, State) ->
+    case cowboy_req:method(Request) of
+        {<<"GET">>, Request2} -> validate_GET_request_params(Request2, State);
+        {<<"POST">>, Request2} -> validate_POST_request_params(Request2, State)
+    end.
+
+
