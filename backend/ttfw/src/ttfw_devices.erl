@@ -172,5 +172,3 @@ malformed_request_unsafe(Request, State) ->
         {<<"GET">>, Request2} -> validate_GET_request_params(Request2, State);
         {<<"POST">>, Request2} -> validate_POST_request_params(Request2, State)
     end.
-
-

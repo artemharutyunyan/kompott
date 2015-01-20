@@ -23,18 +23,19 @@
 %% Auxiliary buckets
 -define(DEVICE_ID_UUID_MAP_BUCKET, <<"tt_device_id_to_uuid_map_bucket">>).
 
-%% Records 
+%% Records
 -record(customer, {name, uuid, creation_time}).
 -record(device, {name, uuid, customer_id, external_id, description, creation_time, update_time}).
--record(package, {name, uuid, creation_time, update_time, latest_release}).
+-record(package, {name, uuid, customer_id, device_id, description, creation_time, update_time, latest_release}).
 -record(release, {name, uuid, creation_time, version, files}).
 
 %% Corresponding proplist key names
 -define(NAME_KEY, <<"name">>).
 -define(DESC_KEY, <<"description">>).
--define(ID_KEY, <<"deviceId">>).
+-define(DEVICE_ID_KEY, <<"deviceId">>).
 -define(UPDATE_KEY, <<"updateTime">>).
 -define(CREATION_KEY, <<"creationTime">>).
+-define(PACKAGE_ID_KEY, <<"creationTime">>).
 
 %% State definitions
 -record(fw_state, {db_connection, connected = false}).
@@ -46,5 +47,5 @@
 -define(E_DB_CONN, no_db_connection).
 -define(E_BAD_REQ, bad_request).
 -define(E_ID_EXIST,id_exists).
-
+-define(E_ID_WRONG, id_wrong).
 

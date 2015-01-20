@@ -13,8 +13,8 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 %% Internal functions
--export([customer_add/2, package_add/4, release_add/5]).
--export([package_get/3, release_get/4]).
+-export([customer_add/2, release_add/5]).
+-export([release_get/4]).
 
 %%
 %% interface callback implementations
@@ -35,15 +35,14 @@ handle_call({customer_add, #tt_customer{} = TtCustomer}, _From, #fw_state{} = St
     Customer = #customer{name = TtCustomer#tt_customer.name},
     {reply, customer_add(Customer, State), State};
 
-%% device add
+%% device add/get
 handle_call({device_add, #tt_device{} = TtDevice}, _From, #fw_state{} = State) ->
     %% Map request parameters to internal data structures
     Customer = #customer{uuid = TtDevice#tt_device.customer},
     Device = #device{
                        description = TtDevice#tt_device.description,
-                       external_id = TtDevice#tt_device.id,
                               name = TtDevice#tt_device.name,
-                       customer_id = TtDevice#tt_device.customer
+                       external_id = TtDevice#tt_device.id
                     },
     {reply, device_add(Customer, Device, State), State};
 handle_call({device_get, #tt_device{} = TtDevice}, _from, #fw_state{} = State) ->
@@ -51,6 +50,23 @@ handle_call({device_get, #tt_device{} = TtDevice}, _from, #fw_state{} = State) -
     Customer = #customer{uuid = TtDevice#tt_device.customer},
     Device = #device{external_id = TtDevice#tt_device.id},
     {reply, device_get(Customer, Device, State), State};
+
+%% package add/get
+handle_call({package_add, #tt_package{} = TtPackage}, _From, #fw_state{} = State) ->
+    %% Map request parameters to internal data structures
+    Customer = #customer{uuid = TtPackage#tt_package.customer},
+    Device = #device{external_id = TtPackage#tt_package.device},
+    Package = #package{
+                               name = TtPackage#tt_package.name,
+                        description = TtPackage#tt_package.description
+                      },
+    {reply, package_add(Customer, Device, Package, State), State};
+handle_call({package_get, #tt_package{} = TtPackage}, _From, #fw_state{} = State) ->
+    %% Map request parameters to internal data structures
+    Customer = #customer{uuid = TtPackage#tt_package.customer},
+    Device = #device{external_id = TtPackage#tt_package.device},
+    Package = #package{uuid = TtPackage#tt_package.id},
+    {reply, package_get(Customer, Device, Package, State), State};
 
 handle_call(Request, _From, State) ->
     lager:warning("Unexpected request ~p in ~p:handle_call", [Request, ?MODULE]),
@@ -94,7 +110,7 @@ device_add(#customer{} = Customer, #device{} = Device, State) ->
             %% Create a device and add it to the device bucket
             UUID = uuid:uuid_to_string(uuid:get_v4()),
             lager:info("Adding device ~p (UUID ~p).", [Device#device.name, UUID]),
-            D = Device#device{uuid = UUID, creation_time = ttcommon:utc_timestamp()},
+            D = Device#device{uuid = UUID, creation_time = ttcommon:utc_timestamp(), customer_id = Customer#customer.uuid},
             %% Add device object to the device bucket
             DeviceObj = riakc_obj:new(?DEVICE_BUCKET, device_key(Customer, D), term_to_binary(D)),
             ok = riakc_pb_socket:put(Pid, DeviceObj),
@@ -111,20 +127,33 @@ device_add(#customer{} = Customer, #device{} = Device, State) ->
             {error, ?E_ID_EXIST}
     end.
 
-%% Creates an entry in the package bucket and adds the packadg to
+%% Creates an entry in the package bucket and adds the packade to
 %% device's package set
 package_add(#customer{} = Customer, #device{} = Device, #package{} = Package, State) ->
     {ok, Pid} = get_riak_connection(State),
-    %% Create a package and add it to the package bucket
-    UUID  = uuid:uuid_to_string(uuid:get_v4()),
-    lager:info("Adding package ~p (UUID ~p) for device ~p, customer ~p.",
-        [Package#package.name, UUID, Device#device.uuid, Device#device.uuid]),
-    P = Package#package{uuid = UUID, creation_time = ttcommon:utc_timestamp()},
-    %% Add package to packages bucket
-    PackageObj = riakc_obj:new(?PACKAGE_BUCKET, package_key(Customer, Device, P), P),
-    ok = riakc_pb_socket:put(Pid, PackageObj),
-    %% Add package to device's set of packages
-    ok = add_package_to_device_set(Customer, Device, P, State).
+    %% Make sure device with the given ID exists
+    IdMap = device_external_id_map_key(Customer, Device),
+    case riakc_pb_socket:get(Pid, ?DEVICE_ID_UUID_MAP_BUCKET, IdMap) of
+        {error, notfound} ->
+            %% Device ID does not exist
+            lager:error("Device with ID: ~p/Customer: ~p does not exist. Failed to add package.",
+                [Device#device.external_id, Customer#customer.uuid]),
+                {error, ?E_ID_WRONG};
+        {ok, UUIDObj} ->
+            DeviceUUID = binary_to_term(riakc_obj:get_value(UUIDObj)),
+            %% Create a package and add it to the package bucket
+            UUID  = uuid:uuid_to_string(uuid:get_v4()),
+            lager:info("Adding package ~p (UUID ~p) for device ~p, customer ~p.",
+                [Package#package.name, UUID, DeviceUUID, Customer#customer.uuid]),
+            P = Package#package{uuid = UUID, creation_time = ttcommon:utc_timestamp()},
+            D = Device#device{uuid = DeviceUUID},
+            %% Add package to packages bucket
+            PackageObj = riakc_obj:new(?PACKAGE_BUCKET, package_key(Customer, D, P), P),
+            ok = riakc_pb_socket:put(Pid, PackageObj),
+            %% Add package to device's set of packages
+            ok = add_package_to_device_set(Customer, D, P, State),
+            {ok, UUID}
+    end.
 
 %% Creates an entry in the release bucket and adds the release
 %% to package's release list
@@ -145,7 +174,7 @@ release_add(#customer{} = Customer, #device{} = Device, #package{} = Package, #r
 device_get(#customer{} = Customer, #device{external_id = undefined}, State) ->
     %% Device ID not provided. Fetch all the devices for a given customer.
     S = get_customer_device_set(Customer, State),
-    {ok, set_element_retrieve(S, ?DEVICE_BUCKET, State)};
+    {ok, set_element_retrieve(S, ?DEVICE_BUCKET, fun device_rec_to_proplist/1, State)};
 device_get(#customer{} = Customer, #device{} = Device, State) ->
     {ok, Pid} = get_riak_connection(State),
     %% Map an external ID (from request) to the internal UUID of the device
@@ -169,16 +198,53 @@ device_get(#customer{} = Customer, #device{} = Device, State) ->
             end
     end.
 
-
 %% Retrieves the list of packages for a given customer/device combination
-package_get(#customer{} = Customer, #device{} = Device, State) ->
-    S = get_device_package_set(Customer, Device, State),
-    set_element_retrieve(S, ?PACKAGE_BUCKET, State).
+package_get(#customer{} = Customer, #device{} = Device, #package{uuid = undefined}, State) ->
+    {ok, Pid} = get_riak_connection(State),
+    %% Make sure device with the given ID exists
+    IdMap = device_external_id_map_key(Customer, Device),
+    case riakc_pb_socket:get(Pid, ?DEVICE_ID_UUID_MAP_BUCKET, IdMap) of
+        {error, notfound} ->
+            %% Device Id does not exist
+            lager:error("Device with ID ~p/Customer: ~p does not exist. Failed to add package.",
+                [Device#device.external_id, Customer#customer.uuid]),
+            {error, ?E_ID_WRONG};
+        {ok, UUIDObj} ->
+            DeviceUUID = binary_to_term(riakc_obj:get_value(UUIDObj)),
+            D = Device#device{uuid = DeviceUUID},
+            S = get_device_package_set(Customer, D, State),
+            {ok, set_element_retrieve(S, ?PACKAGE_BUCKET, fun package_rec_to_proplist/1, State)}
+    end;
+%% Retrieves the list of packages for a given customer/device combination
+package_get(#customer{} = Customer, #device{} = Device, #package{} = Package, State) ->
+    {ok, Pid} = get_riak_connection(State),
+    %% Make sure device with the given ID exists
+    IdMap = device_external_id_map_key(Customer, Device),
+    case riakc_pb_socket:get(Pid, ?DEVICE_ID_UUID_MAP_BUCKET, IdMap) of
+        {error, notfound} ->
+            %% Device Id does not exist
+            lager:error("Device with ID ~p/Customer: ~p does not exist. Failed to add package.",
+                [Device#device.external_id, Customer#customer.uuid]),
+            {error, ?E_ID_WRONG};
+        {ok, UUIDObj} ->
+            DeviceUUID = binary_to_term(riakc_obj:get_value(UUIDObj)),
+            D = Device#device{uuid = DeviceUUID},
+            PackageKey = package_key(Customer, D, Package),
+            %% Fetch package object and return
+            case riakc_pb_socket:get(Pid, ?PACKAGE_BUCKET, PackageKey) of
+                {error, notfound} ->
+                    {ok, []};
+                {ok, PackageObj} ->
+                    {ok, [package_rec_to_proplist(binary_to_term(riakc_obj:get_value(PackageObj)))]}
+            end
+    end.
+
+
 
 %% Retrives the list of releases for a given customer/device/package combination
 release_get(#customer{} = Customer, #device{} = Device, #package{} = Package, State) ->
     S = get_package_release_set(Customer, Device, Package, State),
-    set_element_retrieve(S, ?RELEASE_BUCKET, State).
+    set_element_retrieve(S, ?RELEASE_BUCKET, release_rec_to_proplist, State).
 
 %%
 %% Internal functions
@@ -288,14 +354,14 @@ package_release_set_key(#customer{} = Customer, #device{} = Device, #package{} =
     list_to_binary(Customer#customer.uuid ++ "_" ++ Device#device.uuid ++ "_" ++ Package#package.uuid ++ "_release_set").
 
 %% Convert a riak client set to list
-set_element_retrieve(Set, Bucket, State) ->
+set_element_retrieve(Set, Bucket, ConvFun, State) ->
     {ok, Pid} = get_riak_connection(State),
     F = fun(Key, List) ->
             {ok, Elem} = riakc_pb_socket:get(Pid, Bucket, Key),
             [binary_to_term(riakc_obj:get_value(Elem))| List]
     end,
     Devices = riakc_set:fold(F, [], Set),
-    C = fun(D) -> device_rec_to_proplist(D) end,
+    C = fun(D) -> ConvFun(D) end,
     lists:map(C, Devices).
 
 %% Return riak connection handle
@@ -306,9 +372,19 @@ get_riak_connection(#fw_state{ db_connection = Pid}) ->
 device_rec_to_proplist(Device) ->
     [{?NAME_KEY, format_value(Device#device.name)},
      {?DESC_KEY, format_value(Device#device.description)},
-     {?ID_KEY, format_value(Device#device.external_id)},
+     {?DEVICE_ID_KEY, format_value(Device#device.external_id)},
      {?UPDATE_KEY, format_value(Device#device.update_time)},
      {?CREATION_KEY, format_value(Device#device.creation_time)}
+    ].
+
+%% Convert a package record to proplist
+package_rec_to_proplist(Package) ->
+    [{?NAME_KEY, format_value(Package#package.name)},
+     {?DESC_KEY, format_value(Package#package.description)},
+     {?PACKAGE_ID_KEY, format_value(Package#package.uuid)},
+     {?DEVICE_ID_KEY, format_value(Package#package.device_id)},
+     {?UPDATE_KEY, format_value(Package#package.update_time)},
+     {?CREATION_KEY, format_value(Package#package.creation_time)}
     ].
 
 %% Format output values

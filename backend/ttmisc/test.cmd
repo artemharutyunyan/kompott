@@ -12,12 +12,8 @@ fw:customer_add(#customer{name = acme3}).
 # Device
 fw:device_add(#customer{uuid="773b00e3-8363-4ff5-ae99-ae160dbed1bd"}, #device{name=dev1}).
 fw:device_get(#customer{uuid="773b00e3-8363-4ff5-ae99-ae160dbed1bd"}).
-# Using gen_server
-rd(tt_device, {name, id, customer, description}).
-ttdb:device_add(#tt_device{name = somerandom, id="asdx00e",customer = "773b00e3-8363-4ff5-ae99-ae160dbed1bd", description = "rather lengthy"}).
 
 # Package
-fw:package_add(#customer{uuid="773b00e3-8363-4ff5-ae99-ae160dbed1bd"}, #device{uuid="206f657b-8fe2-4af8-b0c0-c1ccdb9cc5ab"}, #package{name=acmepkg}.
 fw:package_get(#customer{uuid="773b00e3-8363-4ff5-ae99-ae160dbed1bd"}, #device{uuid="206f657b-8fe2-4af8-b0c0-c1ccdb9cc5ab"}).
 
 # Release
@@ -28,18 +24,23 @@ fw:release_get(#customer{uuid="773b00e3-8363-4ff5-ae99-ae160dbed1bd"}, #device{u
 
 
 %% --------------------------------------------------------------------------
-%% Public interface
+%% Public interface (using gen_server)
 %% --------------------------------------------------------------------------
 
 %% Records
-rd(tt_device, {name, id, customer, description}).
 rd(tt_customer, {name}).
+rd(tt_device, {name, id, customer, description}).
+rd(tt_package, {name, device, customer, description, id}).
 
 ttdb:customer_add(#tt_customer{name="acme"}).
 
-ttdb:device_add(#tt_device{name = somerandom, id="0xA", customer="60a8c12f-9628-430d-801a-2d95e1d68d8e", description="device description goes here").
+ttdb:device_add(#tt_device{name = somerandom, id="0xA", customer="60a8c12f-9628-430d-801a-2d95e1d68d8e", description="device description goes here"}).
 ttdb:device_get(#tt_device{customer="60a8c12f-9628-430d-801a-2d95e1d68d8e"}).
 ttdb:device_get(#tt_device{customer="60a8c12f-9628-430d-801a-2d95e1d68d8e", id="S0ME"}).
+
+ttdb:package_add(#tt_package{customer="60a8c12f-9628-430d-801a-2d95e1d68d8e", device="S0ME",description="first package", name=pkg}).
+ttdb:package_get(#tt_package{device="S0ME", customer="60a8c12f-9628-430d-801a-2d95e1d68d8e"}).
+ttdb:package_get(#tt_package{device="S0ME", customer="60a8c12f-9628-430d-801a-2d95e1d68d8e", id="4a1fac77-800c-4463-bb57-1e2bce177028"}).
 
 curl --header "Content-Type: application/json"   127.0.0.1:8080/v1/customers/60a8c12f-9628-430d-801a-2d95e1d68d8e/deviceTypes/S0ME
 curl --header "Content-Type: application/json"   127.0.0.1:8080/v1/customers/60a8c12f-9628-430d-801a-2d95e1d68d8e/deviceTypes
