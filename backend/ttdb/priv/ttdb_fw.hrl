@@ -35,7 +35,7 @@
 -define(DEVICE_ID_KEY, <<"deviceId">>).
 -define(UPDATE_KEY, <<"updateTime">>).
 -define(CREATION_KEY, <<"creationTime">>).
--define(PACKAGE_ID_KEY, <<"creationTime">>).
+-define(PACKAGE_ID_KEY, <<"packageId">>).
 
 %% State definitions
 -record(fw_state, {db_connection, connected = false}).

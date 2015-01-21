@@ -34,16 +34,23 @@ rd(tt_package, {name, device, customer, description, id}).
 
 ttdb:customer_add(#tt_customer{name="acme"}).
 
+%% Devices
 ttdb:device_add(#tt_device{name = somerandom, id="0xA", customer="60a8c12f-9628-430d-801a-2d95e1d68d8e", description="device description goes here"}).
 ttdb:device_get(#tt_device{customer="60a8c12f-9628-430d-801a-2d95e1d68d8e"}).
 ttdb:device_get(#tt_device{customer="60a8c12f-9628-430d-801a-2d95e1d68d8e", id="S0ME"}).
+
+curl --header "Content-Type: application/json"   127.0.0.1:8080/v1/customers/60a8c12f-9628-430d-801a-2d95e1d68d8e/devicetypes/S0ME
+curl --header "Content-Type: application/json"   127.0.0.1:8080/v1/customers/60a8c12f-9628-430d-801a-2d95e1d68d8e/devicetypes
+
+curl --include --request POST --header 'Content-Type: application/json' --data-binary '{ "name": "Charging station.", "description": "No life without it" }' 127.0.0.1:8080/v1/customers/60a8c12f-9628-430d-801a-2d95e1d68d8e/devicetypes/a454
+
+%% Packages
 
 ttdb:package_add(#tt_package{customer="60a8c12f-9628-430d-801a-2d95e1d68d8e", device="S0ME",description="first package", name=pkg}).
 ttdb:package_get(#tt_package{device="S0ME", customer="60a8c12f-9628-430d-801a-2d95e1d68d8e"}).
 ttdb:package_get(#tt_package{device="S0ME", customer="60a8c12f-9628-430d-801a-2d95e1d68d8e", id="4a1fac77-800c-4463-bb57-1e2bce177028"}).
 
-curl --header "Content-Type: application/json"   127.0.0.1:8080/v1/customers/60a8c12f-9628-430d-801a-2d95e1d68d8e/deviceTypes/S0ME
-curl --header "Content-Type: application/json"   127.0.0.1:8080/v1/customers/60a8c12f-9628-430d-801a-2d95e1d68d8e/deviceTypes
+curl --header "Content-Type: application/json"   127.0.0.1:8080/v1/customers/60a8c12f-9628-430d-801a-2d95e1d68d8e/devicetypes/S0ME/packages
+curl --header "Content-Type: application/json"   127.0.0.1:8080/v1/customers/60a8c12f-9628-430d-801a-2d95e1d68d8e/devicetypes/S0ME/packages/76ca29e5-4821-4a61-a687-db1c5212d1e1
 
-curl --include --request POST --header 'Content-Type: application/json' --data-binary '{ "name": "Charging station.", "description": "No life without it" }' 127.0.0.1:8080/v1/customers/60a8c12f-9628-430d-801a-2d95e1d68d8e/devicetypes/a454
-
+curl --include --request POST --header 'Content-Type: application/json' --data-binary '{ "name": "Package through POST.", "description": "No life without it" }' 127.0.0.1:8080/v1/customers/60a8c12f-9628-430d-801a-2d95e1d68d8e/devicetypes/S0ME/packages
