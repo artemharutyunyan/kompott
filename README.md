@@ -7,7 +7,7 @@
 The following commands will install Erlang version r16b03-1 in /opt/erlang/r16b03-1. Before running please substitute USERNAME with your actual username.
 
 
-```bash
+``` bash
   $ curl -O https://raw.githubusercontent.com/spawngrid/kerl/master/kerl
   $ chmod +x kerl
   $ ./kerl build R16B03-1 r16b03-1
@@ -19,14 +19,12 @@ The following commands will install Erlang version r16b03-1 in /opt/erlang/r16b0
 ## Setting up build environment and building the release
 Activate your Erlang installation by running
 
-```
-#!bash
+```bash
  $ . /opt/erlang/erlang-r16b03-1/activate
 ```
 
 Change to kompott source root, setup the build environemt, build 3rdparty dependencies and the backend
-```
-#!bash
+```bash
   $ cd kompott
   $ . setup
   $ cd deps
@@ -37,8 +35,7 @@ Change to kompott source root, setup the build environemt, build 3rdparty depend
 
 To generate the release
 
-```
-#!bash
+```bash
   $ cd ttnode
   $ rebar clean compile generate
 ```
